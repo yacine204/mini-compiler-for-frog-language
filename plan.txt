@@ -1,0 +1,60 @@
+build a mini compiler for FROG using C 
+
+
+info given from uni paper: 
+
+#########################################################################################################
+goal of this project is to build a compiler thats able to analyse (lexical, syntax, symantic)
+a FROG file 
+
+
+for testing the file going to be a .FRG written with FROG
+
+for lexical analysis:
+- all the tokens has to be known
+
+for lexical syntaxic: 
+-syntaxic errors should be shown like false declarations...etc
+
+for semantic analaysis:
+-symantic errors should be shown like the unmatched types, using variables that arent declared...etc
+
+frog code should be written like this:
+-begins with FRG_Begin
+-ends with FRG_End
+-one instruction per line
+-instruction ends with #
+-a comment takes the whole line and starts with #
+-ID always starts with a character and then can be followed by numbers
+-integers composed by one number minimium and should be declared with FRG_Int followed by its ID
+-float composed by two integers split by '.' and declared with FRG_Real followed by its ID
+-string placed between two double quotes and declared with FRG_Strg followed by its ID
+
+all this should be presented with an interface with a button that give user access to upload his .frg file
+with three buttons 
+analyse lexicale
+analyse syntaxic
+analyse semantique
+
+under it two blocks one containing the source code of the frg file and the other file will be the result
+of the click of buttons
+#########################################################################################################
+
+
+tokens: 
+-basically everything in code to feed to the parser
+
+symbol: 
+-keeps tracks of whats written in code
+
+
+example FRG_Int x:=3 x:
+
+tokens:
+FRG_Int type integer
+x ID
+:= assign
+3 number
+
+symbol: 
+x type: integer ,value: 3
