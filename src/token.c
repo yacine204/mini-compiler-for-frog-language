@@ -31,5 +31,16 @@ void add_token(TokenList *list, Token token){
 }
 
 void free_token_list(TokenList *list){
-    free(list);
+    if(list == NULL || list->tokens == NULL){
+        return;
+    }
+
+    for(int i = 0; i < list->count; i++){
+        free(list->tokens[i].value);
+    }
+
+    free(list->tokens);
+    list->tokens = NULL;
+    list->count = 0;
+    list->capacity = 0;
 }

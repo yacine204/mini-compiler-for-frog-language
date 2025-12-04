@@ -6,6 +6,37 @@
 #include "../include/error.h"
 #include "../include/lexer.h"
 
+static int equals_ignore_case(const char *a, const char *b) {
+    while(*a && *b) {
+        if(tolower((unsigned char)*a) != tolower((unsigned char)*b)) {
+            return 0;
+        }
+        a++;
+        b++;
+    }
+    return *a == '\0' && *b == '\0';
+}
+
+static void emit_token(TokenList *tokenList, TokenType type, const char *lexeme, int line, TokenType *last_type) {
+    Token token = create_token(type, lexeme, line);
+    add_token(tokenList, token);
+    if(last_type != NULL) {
+        *last_type = type;
+    }
+}
+
+static int is_comment_line(const char *line) {
+    int idx = 0;
+    while(line[idx] != '\0' && (line[idx] == ' ' || line[idx] == '\t')) {
+        idx++;
+    }
+
+    if(line[idx] == '#' && line[idx + 1] == '#') {
+        return 1;
+    }
+    return 0;
+}
+
 void lexer(char *filePath, TokenList *tokenList, ErrorList *errorList){
     FILE *f = fopen(filePath, "r");
     if(f == NULL){
@@ -15,173 +46,226 @@ void lexer(char *filePath, TokenList *tokenList, ErrorList *errorList){
     
     char line[512];
     int line_number = 1;
+    TokenType last_type = NONE;
     
     while(fgets(line, sizeof(line), f) != NULL){
-        int i = 0;
         int len = strlen(line);
-        
-        // Skip empty lines
+        while(len > 0 && (line[len-1] == '\n' || line[len-1] == '\r')){
+            line[--len] = '\0';
+        }
+
         if(len == 0){
             line_number++;
             continue;
         }
-        
-        // Check for comment (# at start of line or after only whitespace)
-        int is_comment = 0;
-        for(int j = 0; j < len; j++){
-            if(line[j] == '#'){
-                // Check if this # is at the start or only whitespace before it
-                int only_whitespace_before = 1;
-                for(int k = 0; k < j; k++){
-                    if(line[k] != ' ' && line[k] != '\t'){
-                        only_whitespace_before = 0;
-                        break;
-                    }
-                }
-                if(only_whitespace_before){
-                    Token comment = create_token(COMMENT, line, line_number);
-                    add_token(tokenList, comment);
-                    is_comment = 1;
-                    break;
-                }
-            }
-        }
-        
-        if(is_comment){
+
+        if(is_comment_line(line)){
+            // Store the comment text starting at the first '#'
+            const char *comment_start = strchr(line, '#');
+            emit_token(tokenList, COMMENT, comment_start ? comment_start : line, line_number, &last_type);
             line_number++;
             continue;
         }
-        
-        // Process the line character by character
+
+        int i = 0;
         while(i < len){
             char c = line[i];
-            
-            // Skip whitespace
-            if(c == ' ' || c == '\t' || c == '\r' || c == '\n'){
+
+            if(c == ' ' || c == '\t'){
                 i++;
                 continue;
             }
-            
 
-            if(isalpha(c) || c == '_'){
+            if(isalpha((unsigned char)c) || c == '_'){
                 char buffer[256] = {0};
                 int j = 0;
-                
-                // Read identifier: starts with letter/underscore, can contain letters, digits, underscores
-                while(i < len && (isalnum(line[i]) || line[i] == '_')){
-                    buffer[j++] = line[i++];
+
+                while(i < len && (isalnum((unsigned char)line[i]) || line[i] == '_')){
+                    if(j < (int)sizeof(buffer) - 1){
+                        buffer[j++] = line[i];
+                    }
+                    i++;
                 }
                 buffer[j] = '\0';
-                
-                // Check for keywords
-                Token token;
-                if(strcmp(buffer, "FRG_Begin") == 0){
-                    token = create_token(KEYWORD_BEGIN, buffer, line_number);
-                } else if(strcmp(buffer, "FRG_End") == 0){
-                    token = create_token(KEYWORD_END, buffer, line_number);
-                } else if(strcmp(buffer, "FRG_Int") == 0){
-                    token = create_token(KEYWORD_INT, buffer, line_number);
-                } else if(strcmp(buffer, "FRG_Real") == 0){
-                    token = create_token(KEYWORD_REAL, buffer, line_number);
-                } else if(strcmp(buffer, "FRG_Strg") == 0){
-                    token = create_token(KEYWORD_STRING, buffer, line_number);
-                } else if(strcmp(buffer, "If") == 0){
-                    token = create_token(CONDITION, buffer, line_number);
-                } else if(strcmp(buffer, "FRG_Else") == 0){
-                    token = create_token(ELSE, buffer, line_number);
-                } else if(strcmp(buffer, "Repeat") == 0){
-                    token = create_token(REPEAT, buffer, line_number);
-                } else if(strcmp(buffer, "Until") == 0){
-                    token = create_token(UNTIL, buffer, line_number);
+
+                if(equals_ignore_case(buffer, "FRG_Begin")){
+                    emit_token(tokenList, KEYWORD_BEGIN, buffer, line_number, &last_type);
+                } else if(equals_ignore_case(buffer, "FRG_End")){
+                    emit_token(tokenList, KEYWORD_END, buffer, line_number, &last_type);
+                } else if(equals_ignore_case(buffer, "FRG_Int")){
+                    emit_token(tokenList, KEYWORD_INT, buffer, line_number, &last_type);
+                } else if(equals_ignore_case(buffer, "FRG_Real")){
+                    emit_token(tokenList, KEYWORD_REAL, buffer, line_number, &last_type);
+                } else if(equals_ignore_case(buffer, "FRG_Strg")){
+                    emit_token(tokenList, KEYWORD_STRING, buffer, line_number, &last_type);
+                } else if(equals_ignore_case(buffer, "FRG_Print")){
+                    emit_token(tokenList, KEYWORD_PRINT, buffer, line_number, &last_type);
+                } else if(equals_ignore_case(buffer, "If")){
+                    emit_token(tokenList, KEYWORD_IF, buffer, line_number, &last_type);
+                } else if(equals_ignore_case(buffer, "Else")){
+                    emit_token(tokenList, KEYWORD_ELSE, buffer, line_number, &last_type);
+                } else if(equals_ignore_case(buffer, "Repeat")){
+                    emit_token(tokenList, KEYWORD_REPEAT, buffer, line_number, &last_type);
+                } else if(equals_ignore_case(buffer, "Until")){
+                    emit_token(tokenList, KEYWORD_UNTIL, buffer, line_number, &last_type);
+                } else if(equals_ignore_case(buffer, "Begin")){
+                    emit_token(tokenList, BLOCK_BEGIN, buffer, line_number, &last_type);
+                } else if(equals_ignore_case(buffer, "End")){
+                    emit_token(tokenList, BLOCK_END, buffer, line_number, &last_type);
                 } else {
-                    // It's an identifier (variable name)
-                    token = create_token(IDENTIFIER, buffer, line_number);
+                    emit_token(tokenList, IDENTIFIER, buffer, line_number, &last_type);
                 }
-                add_token(tokenList, token);
                 continue;
             }
-            
-            // Check for numbers (integer or float)
-            if(isdigit(c)){
+
+            if(isdigit((unsigned char)c)){
                 char buffer[256] = {0};
                 int j = 0;
                 int has_dot = 0;
-                
-                while(i < len && (isdigit(line[i]) || line[i] == '.')){
+
+                while(i < len && (isdigit((unsigned char)line[i]) || line[i] == '.')){
                     if(line[i] == '.'){
                         if(has_dot){
-                            // Error: multiple dots in number
-                            Error err = create_error(LEXICAL_ERR, 
-                                "Multiple decimal points in number", line_number);
+                            Error err = create_error(LEXICAL_ERR, "Multiple decimal points in number", line_number);
                             add_error(errorList, err);
                             break;
                         }
                         has_dot = 1;
                     }
-                    buffer[j++] = line[i++];
+                    if(j < (int)sizeof(buffer) - 1){
+                        buffer[j++] = line[i];
+                    }
+                    i++;
                 }
                 buffer[j] = '\0';
-                
-                Token token;
+
                 if(has_dot){
-                    token = create_token(FLOAT_LITERAL, buffer, line_number);
+                    emit_token(tokenList, FLOAT_LITERAL, buffer, line_number, &last_type);
                 } else {
-                    token = create_token(INTEGER_LITERAL, buffer, line_number);
+                    emit_token(tokenList, INTEGER_LITERAL, buffer, line_number, &last_type);
                 }
-                add_token(tokenList, token);
                 continue;
             }
-            
-            // Check for string literal 
+
             if(c == '"'){
                 char buffer[512] = {0};
                 int j = 0;
-                i++; // Skip opening quote
-                
-                // Read until closing quote or end of line
-                while(i < len && line[i] != '"' && line[i] != '\n'){
-                    buffer[j++] = line[i++];
+                i++;
+                while(i < len && line[i] != '"'){
+                    if(j < (int)sizeof(buffer) - 1){
+                        buffer[j++] = line[i];
+                    }
+                    i++;
                 }
-                
+
                 if(i >= len || line[i] != '"'){
-                    Error err = create_error(LEXICAL_ERR, 
-                        "Unterminated string literal", line_number);
+                    Error err = create_error(LEXICAL_ERR, "Unterminated string literal", line_number);
                     add_error(errorList, err);
                 } else {
-                    i++; 
-                    buffer[j] = '\0';
-                    Token token = create_token(STRING_LITERAL, buffer, line_number);
-                    add_token(tokenList, token);
+                    i++; // skip closing quote
+                    emit_token(tokenList, STRING_LITERAL, buffer, line_number, &last_type);
                 }
                 continue;
             }
-            
-            
+
             if(c == ':' && i + 1 < len && line[i + 1] == '='){
-                Token token = create_token(ASSIGN_OP, ":=", line_number);
-                add_token(tokenList, token);
+                emit_token(tokenList, ASSIGN_OP, ":=", line_number, &last_type);
                 i += 2;
                 continue;
             }
-            
-            
-            if(c == '#'){
-                Token token = create_token(END_INSTRUCTION, "#", line_number);
-                add_token(tokenList, token);
+
+            if(c == ','){
+                emit_token(tokenList, COMMA, ",", line_number, &last_type);
                 i++;
                 continue;
             }
-            
-            
+
+            if(c == '['){
+                emit_token(tokenList, OPEN_BRACKET, "[", line_number, &last_type);
+                i++;
+                continue;
+            }
+
+            if(c == ']'){
+                emit_token(tokenList, CLOSE_BRACKET, "]", line_number, &last_type);
+                i++;
+                continue;
+            }
+
+            if(c == '('){
+                emit_token(tokenList, OPEN_PAREN, "(", line_number, &last_type);
+                i++;
+                continue;
+            }
+
+            if(c == ')'){
+                emit_token(tokenList, CLOSE_PAREN, ")", line_number, &last_type);
+                i++;
+                continue;
+            }
+
+            if(c == '+'){
+                emit_token(tokenList, OPERATOR_PLUS, "+", line_number, &last_type);
+                i++;
+                continue;
+            }
+
+            if(c == '-'){
+                emit_token(tokenList, OPERATOR_MINUS, "-", line_number, &last_type);
+                i++;
+                continue;
+            }
+
+            if(c == '*'){
+                emit_token(tokenList, OPERATOR_MULTIPLY, "*", line_number, &last_type);
+                i++;
+                continue;
+            }
+
+            if(c == '/'){
+                emit_token(tokenList, OPERATOR_DIVIDE, "/", line_number, &last_type);
+                i++;
+                continue;
+            }
+
+            if(c == '<' || c == '>' || c == '=' || c == '!'){
+                char op[3] = {c, '\0', '\0'};
+                if(i + 1 < len && line[i + 1] == '='){
+                    op[1] = '=';
+                    op[2] = '\0';
+                    i += 2;
+                } else {
+                    if(c == '!'){
+                        char msg[128];
+                        sprintf(msg, "Unknown operator '!'");
+                        Error err = create_error(LEXICAL_ERR, msg, line_number);
+                        add_error(errorList, err);
+                        i++;
+                        continue;
+                    }
+                    i++;
+                }
+                emit_token(tokenList, RELATIONAL_OP, op, line_number, &last_type);
+                continue;
+            }
+
+            if(c == '#'){
+                if(last_type != KEYWORD_BEGIN){
+                    emit_token(tokenList, END_INSTRUCTION, "#", line_number, &last_type);
+                }
+                i++;
+                continue;
+            }
+
             char error_msg[256];
             sprintf(error_msg, "Unknown character '%c'", c);
             Error err = create_error(LEXICAL_ERR, error_msg, line_number);
             add_error(errorList, err);
             i++;
         }
-        
+
         line_number++;
     }
-    
+
     fclose(f);
 }

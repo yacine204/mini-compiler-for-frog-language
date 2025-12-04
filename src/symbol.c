@@ -9,6 +9,7 @@ Symbol create_symbol(const char *name, SymbolType type, int line_declared){
     strcpy(symbol.id, name);
     symbol.type = type;
     symbol.line_declared = line_declared;
+    symbol.value = NULL;
     return symbol;
 };
 
@@ -36,8 +37,19 @@ Symbol* findSymbol(SymbolTable *table, const char *id){
 };
 
 void free_symbol_table(SymbolTable *table){
-    for(int i=0 ; i< table->count; i++)
+    if(table == NULL || table->symbols == NULL){
+        return;
+    }
+
+    for(int i=0 ; i< table->count; i++){
         free(table->symbols[i].id);
+        if(table->symbols[i].value){
+            free(table->symbols[i].value);
+        }
+    }
+
     free(table->symbols);
-    free(table);
+    table->symbols = NULL;
+    table->count = 0;
+    table->capacity = 0;
 };

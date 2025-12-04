@@ -26,12 +26,18 @@ void add_error(ErrorList *list, Error error){
     list->errors[list->count++] = error;
 };
 void free_error_list(ErrorList *list){
-    for(int i=0 ; i < list->capacity ; i++){
+    if(list == NULL || list->errors == NULL){
+        return;
+    }
+
+    for(int i=0 ; i < list->count ; i++){
         free(list->errors[i].err_message);
     }
 
     free(list->errors);
-    free(list);
+    list->errors = NULL;
+    list->count = 0;
+    list->capacity = 0;
 };
 
 
